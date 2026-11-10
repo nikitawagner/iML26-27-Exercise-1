@@ -18,20 +18,22 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, plot_tree
 
+from iml_interpretability import const
+
 
 def train_tree(
     dataset_path: Path,
     target: str,
     *,
-    task: Literal["classification", "regression"] = "classification",
-    output_dir: Path = Path("results"),
+    task: Literal["classification", "regression"] = const.DEFAULT_TASK,
+    output_dir: Path = const.DEFAULT_OUTPUT_DIR,
     drop_columns: Sequence[str] = (),
-    max_depth: int = 5,
-    min_samples_split: int = 2,
-    min_samples_leaf: int = 5,
-    ccp_alpha: float = 0.0,
-    seed: int = 0,
-    test_size: float = 0.25,
+    max_depth: int = const.DEFAULT_MAX_DEPTH,
+    min_samples_split: int = const.DEFAULT_MIN_SAMPLES_SPLIT,
+    min_samples_leaf: int = const.DEFAULT_MIN_SAMPLES_LEAF,
+    ccp_alpha: float = const.DEFAULT_CCP_ALPHA,
+    seed: int = const.DEFAULT_SEED,
+    test_size: float = const.DEFAULT_TEST_SIZE,
 ) -> Path:
     print(f"[1/5] Loading {dataset_path}", flush=True)
     frame = pd.read_csv(dataset_path)
@@ -120,7 +122,7 @@ def train_tree(
     }
     (run_dir / "parameters.json").write_text(json.dumps(parameters, indent=2) + "\n", encoding="utf-8")
 
-    figure = Figure(figsize=(24, 12))
+    figure = Figure(figsize=const.TREE_FIGURE_SIZE)
     FigureCanvasAgg(figure)
     axes = figure.subplots()
     plot_tree(
@@ -129,10 +131,10 @@ def train_tree(
         class_names=[str(label) for label in tree.classes_] if task == "classification" else None,
         filled=True,
         rounded=True,
-        fontsize=8,
+        fontsize=const.TREE_FONT_SIZE,
         ax=axes,
     )
     axes.set_title(f"{dataset_path.stem} — {type(tree).__name__}")
-    figure.savefig(run_dir / "tree.png", dpi=150, bbox_inches="tight")
+    figure.savefig(run_dir / "tree.png", dpi=const.TREE_IMAGE_DPI, bbox_inches="tight")
     print("Scores: " + ", ".join(f"{name}={score:.4f}" for name, score in scores.items()), flush=True)
     return run_dir
