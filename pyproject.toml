@@ -13,6 +13,7 @@ dependencies = [
     "pandas>=2.0",
     "scikit-learn>=1.4",
     "matplotlib>=3.8",
+    "joblib==1.6.0",
 ]
 
 [project.optional-dependencies]
