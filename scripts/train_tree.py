@@ -8,10 +8,36 @@ from iml_interpretability.training import train_tree
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a decision tree from a comma-separated CSV with a header.")
+    parser = argparse.ArgumentParser(
+        description="Train a decision tree or random forest from a comma-separated CSV with a header."
+    )
     parser.add_argument("dataset", type=Path, help="Path to the CSV dataset")
     parser.add_argument("--target", required=True, help="Name of the target column")
     parser.add_argument("--task", choices=["classification", "regression"], default=const.DEFAULT_TASK)
+    parser.add_argument(
+        "--model",
+        choices=["decision_tree", "random_forest"],
+        default=const.DEFAULT_MODEL,
+        help=f"Model to train (default: {const.DEFAULT_MODEL})",
+    )
+    parser.add_argument(
+        "--n-estimators",
+        type=int,
+        default=const.DEFAULT_N_ESTIMATORS,
+        help=f"Number of trees, random forest only (default: {const.DEFAULT_N_ESTIMATORS})",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=const.DEFAULT_N_JOBS,
+        help=f"Parallel workers, random forest only; -1 uses all CPU cores (default: {const.DEFAULT_N_JOBS})",
+    )
+    parser.add_argument(
+        "--max-features",
+        choices=["sqrt", "log2", "all"],
+        default=const.DEFAULT_MAX_FEATURES,
+        help="Features considered per split (default: model-specific)",
+    )
     parser.add_argument("--drop-columns", nargs="+", default=[], help="Exclude IDs or columns that reveal the target")
     parser.add_argument(
         "--max-depth",
@@ -62,6 +88,7 @@ def main() -> None:
             args.dataset,
             args.target,
             task=args.task,
+            model_type=args.model,
             output_dir=args.output_dir,
             drop_columns=args.drop_columns,
             max_depth=args.max_depth,
@@ -70,6 +97,9 @@ def main() -> None:
             ccp_alpha=args.ccp_alpha,
             seed=args.seed,
             test_size=args.test_size,
+            n_estimators=args.n_estimators,
+            n_jobs=args.n_jobs,
+            max_features=args.max_features,
         )
     except (OSError, ValueError) as error:
         parser.exit(2, f"Training failed: {error}\n")

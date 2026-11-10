@@ -11,6 +11,7 @@ import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from sklearn.compose import ColumnTransformer, make_column_selector
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, mean_absolute_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import train_test_split
@@ -26,6 +27,7 @@ def train_tree(
     target: str,
     *,
     task: Literal["classification", "regression"] = const.DEFAULT_TASK,
+    model_type: Literal["decision_tree", "random_forest"] = const.DEFAULT_MODEL,
     output_dir: Path = const.DEFAULT_OUTPUT_DIR,
     drop_columns: Sequence[str] = (),
     max_depth: int = const.DEFAULT_MAX_DEPTH,
@@ -34,6 +36,9 @@ def train_tree(
     ccp_alpha: float = const.DEFAULT_CCP_ALPHA,
     seed: int = const.DEFAULT_SEED,
     test_size: float = const.DEFAULT_TEST_SIZE,
+    n_estimators: int = const.DEFAULT_N_ESTIMATORS,
+    n_jobs: int = const.DEFAULT_N_JOBS,
+    max_features: Literal["sqrt", "log2", "all"] | None = const.DEFAULT_MAX_FEATURES,
 ) -> Path:
     print(f"[1/5] Loading {dataset_path}", flush=True)
     frame = pd.read_csv(dataset_path)
@@ -74,17 +79,24 @@ def train_tree(
             ("boolean", "passthrough", make_column_selector(dtype_include="bool")),
         ]
     )
-    tree_class = DecisionTreeClassifier if task == "classification" else DecisionTreeRegressor
-    tree = tree_class(
-        max_depth=max_depth,
-        min_samples_split=min_samples_split,
-        min_samples_leaf=min_samples_leaf,
-        ccp_alpha=ccp_alpha,
-        random_state=seed,
-    )
-    model = Pipeline([("preprocessing", preprocessing), ("tree", tree)])
+    estimator_parameters = {
+        "max_depth": max_depth,
+        "min_samples_split": min_samples_split,
+        "min_samples_leaf": min_samples_leaf,
+        "ccp_alpha": ccp_alpha,
+        "random_state": seed,
+    }
+    if max_features is not None:
+        estimator_parameters["max_features"] = None if max_features == "all" else max_features
+    if model_type == "random_forest":
+        estimator_class = RandomForestClassifier if task == "classification" else RandomForestRegressor
+        estimator_parameters.update(n_estimators=n_estimators, n_jobs=n_jobs)
+    else:
+        estimator_class = DecisionTreeClassifier if task == "classification" else DecisionTreeRegressor
+    estimator = estimator_class(**estimator_parameters)
+    model = Pipeline([("preprocessing", preprocessing), ("tree", estimator)])
 
-    print(f"[3/5] Training {type(tree).__name__} on {len(X_train)} rows", flush=True)
+    print(f"[3/5] Training {type(estimator).__name__} on {len(X_train)} rows", flush=True)
     model.fit(X_train, y_train)
 
     print(f"[4/5] Evaluating on {len(X_test)} held-out rows", flush=True)
@@ -103,7 +115,7 @@ def train_tree(
     print(f"[5/5] Saving artifacts to {run_dir}", flush=True)
     run_dir.mkdir(parents=True)
     joblib.dump(model, run_dir / "model.joblib")
-    pd.DataFrame([{"dataset": dataset_path.stem, "model": type(tree).__name__, **scores}]).to_csv(
+    pd.DataFrame([{"dataset": dataset_path.stem, "model": type(estimator).__name__, **scores}]).to_csv(
         run_dir / "scores.csv", index=False
     )
     feature_names = preprocessing.get_feature_names_out().tolist()
@@ -111,6 +123,7 @@ def train_tree(
         "dataset": str(dataset_path.resolve()),
         "target": target,
         "task": task,
+        "model_type": model_type,
         "drop_columns": list(drop_columns),
         "features": X.columns.tolist(),
         "transformed_features": feature_names,
@@ -118,23 +131,28 @@ def train_tree(
         "test_rows": len(X_test),
         "test_size": test_size,
         "seed": seed,
-        "hyperparameters": tree.get_params(),
+        "hyperparameters": estimator.get_params(),
+        "visualized_tree_index": 0 if model_type == "random_forest" else None,
     }
     (run_dir / "parameters.json").write_text(json.dumps(parameters, indent=2) + "\n", encoding="utf-8")
 
     figure = Figure(figsize=const.TREE_FIGURE_SIZE)
     FigureCanvasAgg(figure)
     axes = figure.subplots()
+    visualized_tree = estimator.estimators_[0] if model_type == "random_forest" else estimator
     plot_tree(
-        tree,
+        visualized_tree,
         feature_names=feature_names,
-        class_names=[str(label) for label in tree.classes_] if task == "classification" else None,
+        class_names=[str(label) for label in estimator.classes_] if task == "classification" else None,
         filled=True,
         rounded=True,
         fontsize=const.TREE_FONT_SIZE,
         ax=axes,
     )
-    axes.set_title(f"{dataset_path.stem} — {type(tree).__name__}")
+    title = f"{dataset_path.stem} — {type(estimator).__name__}"
+    if model_type == "random_forest":
+        title += f" — tree 1/{len(estimator.estimators_)}"
+    axes.set_title(title)
     figure.savefig(run_dir / "tree.png", dpi=const.TREE_IMAGE_DPI, bbox_inches="tight")
     print("Scores: " + ", ".join(f"{name}={score:.4f}" for name, score in scores.items()), flush=True)
     return run_dir
