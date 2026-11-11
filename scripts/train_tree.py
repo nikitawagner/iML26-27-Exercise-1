@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from subprocess import CalledProcessError
 
 from iml_interpretability import const
 from iml_interpretability.training import train_tree
@@ -9,7 +10,8 @@ from iml_interpretability.training import train_tree
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train a decision tree or random forest from a comma-separated CSV with a header."
+        description="Train a decision tree or random forest from a comma-separated CSV with a header.",
+        epilog="Visualization requires Graphviz (dot) on PATH. On macOS: brew install graphviz",
     )
     parser.add_argument("dataset", type=Path, help="Path to the CSV dataset")
     parser.add_argument("--target", required=True, help="Name of the target column")
@@ -101,7 +103,7 @@ def main() -> None:
             n_jobs=args.n_jobs,
             max_features=args.max_features,
         )
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, CalledProcessError) as error:
         parser.exit(2, f"Training failed: {error}\n")
 
 
