@@ -25,6 +25,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["iml_interpretability"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/AGENTS.md", "/.playwright-mcp/**"]
+
 # Recommended (not enforced) code style, see README.md.
 [tool.ruff]
 target-version = "py310"

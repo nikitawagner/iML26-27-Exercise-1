@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,8 +9,6 @@ from typing import Literal
 
 import joblib
 import pandas as pd
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import SimpleImputer
@@ -17,9 +16,10 @@ from sklearn.metrics import accuracy_score, mean_absolute_error, r2_score, root_
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, plot_tree
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from iml_interpretability import const
+from iml_interpretability.visualization import save_visualization
 
 
 def train_tree(
@@ -40,6 +40,9 @@ def train_tree(
     n_jobs: int = const.DEFAULT_N_JOBS,
     max_features: Literal["sqrt", "log2", "all"] | None = const.DEFAULT_MAX_FEATURES,
 ) -> Path:
+    dot_command = shutil.which("dot")
+    if dot_command is None:
+        raise FileNotFoundError("Graphviz (dot) is required for visualization. On macOS: brew install graphviz")
     print(f"[1/5] Loading {dataset_path}", flush=True)
     frame = pd.read_csv(dataset_path)
     missing_columns = {target, *drop_columns} - set(frame.columns)
@@ -136,23 +139,6 @@ def train_tree(
     }
     (run_dir / "parameters.json").write_text(json.dumps(parameters, indent=2) + "\n", encoding="utf-8")
 
-    figure = Figure(figsize=const.TREE_FIGURE_SIZE)
-    FigureCanvasAgg(figure)
-    axes = figure.subplots()
-    visualized_tree = estimator.estimators_[0] if model_type == "random_forest" else estimator
-    plot_tree(
-        visualized_tree,
-        feature_names=feature_names,
-        class_names=[str(label) for label in estimator.classes_] if task == "classification" else None,
-        filled=True,
-        rounded=True,
-        fontsize=const.TREE_FONT_SIZE,
-        ax=axes,
-    )
-    title = f"{dataset_path.stem} — {type(estimator).__name__}"
-    if model_type == "random_forest":
-        title += f" — tree 1/{len(estimator.estimators_)}"
-    axes.set_title(title)
-    figure.savefig(run_dir / "tree.png", dpi=const.TREE_IMAGE_DPI, bbox_inches="tight")
+    save_visualization(estimator, feature_names, run_dir, dataset_path.stem, dot_command)
     print("Scores: " + ", ".join(f"{name}={score:.4f}" for name, score in scores.items()), flush=True)
     return run_dir
