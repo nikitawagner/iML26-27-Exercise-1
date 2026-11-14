@@ -19,6 +19,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 from iml_interpretability import const
+from iml_interpretability.metric import LeafDepthComplexity
 from iml_interpretability.visualization import save_visualization
 
 
@@ -112,15 +113,32 @@ def train_tree(
             "rmse": root_mean_squared_error(y_test, predictions),
             "r2": r2_score(y_test, predictions),
         }
+    metric = LeafDepthComplexity()
+    scores[metric.name] = metric.score(estimator)
 
     run_name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     run_dir = output_dir / dataset_path.stem / run_name
     print(f"[5/5] Saving artifacts to {run_dir}", flush=True)
     run_dir.mkdir(parents=True)
     joblib.dump(model, run_dir / "model.joblib")
-    pd.DataFrame([{"dataset": dataset_path.stem, "model": type(estimator).__name__, **scores}]).to_csv(
-        run_dir / "scores.csv", index=False
-    )
+    pd.DataFrame(
+        [
+            {
+                "dataset": dataset_path.stem,
+                "model": type(estimator).__name__,
+                "task": task,
+                "max_depth": max_depth,
+                "n_estimators": len(estimator.estimators_) if model_type == "random_forest" else 1,
+                "min_samples_split": min_samples_split,
+                "min_samples_leaf": min_samples_leaf,
+                "ccp_alpha": ccp_alpha,
+                "max_features": estimator.max_features,
+                "seed": seed,
+                "test_size": test_size,
+                **scores,
+            }
+        ]
+    ).to_csv(run_dir / "scores.csv", index=False)
     feature_names = preprocessing.get_feature_names_out().tolist()
     parameters = {
         "dataset": str(dataset_path.resolve()),
