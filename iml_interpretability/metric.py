@@ -10,13 +10,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import log2
+from statistics import mean
 
 from sklearn.base import ClassifierMixin
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.validation import check_is_fitted
-
-from iml_interpretability.data import Dataset
 
 
 class InterpretabilityMetric(ABC):
@@ -26,11 +25,10 @@ class InterpretabilityMetric(ABC):
     name: str
 
     @abstractmethod
-    def score(self, model: ClassifierMixin, dataset: Dataset) -> float:
+    def score(self, model: ClassifierMixin) -> float:
         """Compute the interpretability score of a fitted model.
 
-        :param model: A model fitted on ``dataset``.
-        :param dataset: The dataset the model was fitted on.
+        :param model: A fitted model.
         :return: The interpretability score. Document whether higher means more or less interpretable.
         :rtype: float
         """
@@ -47,7 +45,7 @@ class RelativeNumberOfLeaves(InterpretabilityMetric):
 
     name = "relative_n_leaves"
 
-    def score(self, model: ClassifierMixin, dataset: Dataset) -> float:
+    def score(self, model: ClassifierMixin) -> float:
         if not isinstance(model, DecisionTreeClassifier):
             raise TypeError(f"{type(self).__name__} only supports DecisionTreeClassifier, got {type(model).__name__}")
         return model.get_n_leaves() / 2 ** model.get_depth()
@@ -58,12 +56,10 @@ class LeafDepthComplexity(InterpretabilityMetric):
 
     For a tree, the score is ``log2(L) + mean(leaf depths)``, where every
     leaf contributes equally and the root has depth zero. For a forest, the
-    scores of its trees are summed and ``T - 1`` is added for ``T`` trees.
+    scores of its trees are averaged and ``T - 1`` is added for ``T`` trees,
+    accounting for average tree complexity and ensemble size separately.
     Higher scores indicate greater structural complexity and thus potentially
-    lower interpretability. The score is deliberately not normalized because
-    the normalization has not yet been specified in the team protocol.
-    ``dataset`` is unused: the score describes model structure, not how often
-    the dataset visits each leaf.
+    lower interpretability.
     """
 
     name = "leaf_depth_complexity"
@@ -87,13 +83,14 @@ class LeafDepthComplexity(InterpretabilityMetric):
                 stack.append((right, depth + 1))
 
         return float(log2(leaf_count) + depth_sum / leaf_count)
-    def score(self, model: ClassifierMixin, dataset: Dataset) -> float:
+
+    def score(self, model: ClassifierMixin) -> float:
         if isinstance(model, DecisionTreeClassifier):
             check_is_fitted(model)
             return self._tree_score(model)
         if isinstance(model, RandomForestClassifier):
             check_is_fitted(model)
-            return float(sum(self._tree_score(tree) for tree in model.estimators_) + len(model.estimators_) - 1)
+            return float(mean(self._tree_score(tree) for tree in model.estimators_) + len(model.estimators_) - 1)
         raise TypeError(
             f"{type(self).__name__} only supports DecisionTreeClassifier and "
             f"RandomForestClassifier, got {type(model).__name__}"
