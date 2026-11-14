@@ -36,7 +36,6 @@ def evaluate(
         X_train, X_test, y_train, y_test = train_test_split(
             dataset.X, dataset.y, test_size=test_size, random_state=seed, stratify=dataset.y
         )
-        train = Dataset(name=dataset.name, X=X_train, y=y_train)
         for model_name, model in models.items():
             # Clone so that the same unfitted model can be reused across datasets.
             fitted = clone(model).fit(X_train, y_train)
@@ -46,6 +45,6 @@ def evaluate(
                 "accuracy": accuracy_score(y_test, fitted.predict(X_test)),
             }
             for metric in metrics:
-                row[metric.name] = metric.score(fitted, train)
+                row[metric.name] = metric.score(fitted)
             rows.append(row)
     return pd.DataFrame(rows)

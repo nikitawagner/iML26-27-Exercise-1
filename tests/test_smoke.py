@@ -14,7 +14,7 @@ from iml_interpretability import Dataset, InterpretabilityMetric, RelativeNumber
 class _ConstantMetric(InterpretabilityMetric):
     name = "constant"
 
-    def score(self, model, dataset):
+    def score(self, model):
         return 1.0
 
 
@@ -33,7 +33,7 @@ def test_evaluate_returns_one_row_per_dataset_and_model(dataset):
 
 def test_relative_number_of_leaves_matches_tree(dataset):
     model = DecisionTreeClassifier(max_depth=2, random_state=0).fit(dataset.X, dataset.y)
-    score = RelativeNumberOfLeaves().score(model, dataset)
+    score = RelativeNumberOfLeaves().score(model)
     assert score == model.get_n_leaves() / 2 ** model.get_depth()
     assert 0 < score <= 1
 
@@ -41,4 +41,4 @@ def test_relative_number_of_leaves_matches_tree(dataset):
 def test_relative_number_of_leaves_rejects_non_tree_models(dataset):
     model = LogisticRegression().fit(dataset.X, dataset.y)
     with pytest.raises(TypeError):
-        RelativeNumberOfLeaves().score(model, dataset)
+        RelativeNumberOfLeaves().score(model)
